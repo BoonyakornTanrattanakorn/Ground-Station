@@ -64,22 +64,22 @@ void setup() {
   }
   
   xTaskCreatePinnedToCore(
-                  compass_update,       /* Task function. */
-                  "compass update",     /* name of task. */
-                  10000,                /* Stack size of task */
-                  NULL,                 /* parameter of the task */
-                  1,                    /* priority of the task */
-                  NULL,                 /* Task handle to keep track of created task */
-                  1);                   /* pin task to core 1 */
+              compass_update,       /* Task function. */
+              "compass update",     /* name of task. */
+              10000,                /* Stack size of task */
+              NULL,                 /* parameter of the task */
+              1,                    /* priority of the task */
+              NULL,                 /* Task handle to keep track of created task */
+              1);                   /* pin task to core 1 */
   
   xTaskCreatePinnedToCore(
-                az_control,           /* Task function. */
-                "az control",         /* name of task. */
-                10000,                /* Stack size of task */
-                NULL,                 /* parameter of the task */
-                2,                    /* priority of the task */
-                NULL,                 /* Task handle to keep track of created task */
-                1);                   /* pin task to core 1 */
+              az_control,           /* Task function. */
+              "az control",         /* name of task. */
+              10000,                /* Stack size of task */
+              NULL,                 /* parameter of the task */
+              2,                    /* priority of the task */
+              NULL,                 /* Task handle to keep track of created task */
+              1);                   /* pin task to core 1 */
   
   xTaskCreatePinnedToCore(
               el_control,           /* Task function. */
@@ -92,9 +92,6 @@ void setup() {
 }
 
 void loop() {
-  Motor.az_ccw();
-  delay(2000);
-  Motor.az_cw();
   delay(2000);
 }
 

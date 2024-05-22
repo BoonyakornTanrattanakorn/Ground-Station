@@ -3,6 +3,7 @@
 
 #include <LSM303.h>
 #include <Wire.h>
+#include <SimpleKalmanFilter.h>
 
 class LSM303_sensor
 {
