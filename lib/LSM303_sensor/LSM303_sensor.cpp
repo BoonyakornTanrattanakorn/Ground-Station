@@ -17,12 +17,17 @@ void LSM303_sensor::begin(){
 
 void LSM303_sensor::update(){
     compass.read();
-    az_reading = compass.heading((LSM303::vector<int>){1, 0, 0});
-    current_az_vector[0] = cos(az_reading * DEG_TO_RAD) * S + current_az_vector[0] * (1-S);
-    current_az_vector[1] = sin(az_reading * DEG_TO_RAD) * S + current_az_vector[1] * (1-S);
-    az = RAD_TO_DEG * atan2(current_az_vector[1], current_az_vector[0]);
+
+    raw_az_reading = compass.heading((LSM303::vector<int>){1, 0, 0});
+    raw_az_vector[0] = cos(raw_az_reading * DEG_TO_RAD);
+    raw_az_vector[1] = sin(raw_az_reading * DEG_TO_RAD);
+    estimated_az_vector[0] = azX_estimate.updateEstimate(raw_az_vector[0]);
+    estimated_az_vector[1] = azY_estimate.updateEstimate(raw_az_vector[1]);
+    az = RAD_TO_DEG * atan2(estimated_az_vector[1], estimated_az_vector[0]);
     az += az < 0 ? 360 : 0;
-    el = RAD_TO_DEG * (atan2(compass.a.x, compass.a.z)) * S + el * (1-S);
+
+    raw_el = RAD_TO_DEG * (atan2(compass.a.x, compass.a.z));
+    el = el_estimate.updateEstimate(raw_el);
 }
 
 void LSM303_sensor::set_calibration_data(LSM303::vector<int16_t> min, LSM303::vector<int16_t> max){
