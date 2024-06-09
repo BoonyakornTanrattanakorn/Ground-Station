@@ -94,9 +94,28 @@ void loop(){
   // send(AZ_EL);
 }
 
+struct SensorData
+{
+  float temperature;
+  float pressure;
+  float altitude;
+  int32_t latitude;
+  int32_t longitude;
+  int32_t altitudeGPS;
+  float accelerationX;
+  float accelerationY;
+  float accelerationZ;
+  float gyroscopeX;
+  float gyroscopeY;
+  float gyroscopeZ;
+};
+
+SensorData telemetry;
+
+#include <LoRaSettings.h>
+
 void LoRa_thread(void* pvParameters){
   SX126x LoRa;
-  
   // Begin LoRa radio and set NSS, reset, busy, txen, and rxen pin with connected arduino pins
   Serial.println("Begin LoRa radio");
   int8_t nssPin = 5, resetPin = 34, busyPin = 35, irqPin = -1, txenPin = -1, rxenPin = -1;
@@ -105,35 +124,15 @@ void LoRa_thread(void* pvParameters){
     while(1);
   }
 
-  // Configure TCXO or XTAL used in RF module
-  uint8_t dio3Voltage = SX126X_DIO3_OUTPUT_1_8;
-  uint32_t tcxoDelay = SX126X_TCXO_DELAY_1;
-  LoRa.setDio3TcxoCtrl(dio3Voltage, tcxoDelay);
-  
-  // Set frequency to 915 Mhz
-  LoRa.setFrequency(915000000);
-
-  // Set RX gain to boosted gain
-  LoRa.setRxGain(SX126X_RX_GAIN_BOOSTED);
-
-  // Configure modulation parameter including spreading factor (SF), bandwidth (BW), and coding rate (CR)
-  uint8_t sf = 6;
-  uint32_t bw = 500000;
-  uint8_t cr = 5;
-  LoRa.setLoRaModulation(sf, bw, cr);
-
-  // Configure packet parameter including header type, preamble length, payload length, and CRC type
-  uint8_t headerType = SX126X_HEADER_EXPLICIT;
-  uint16_t preambleLength = 12;
-  uint8_t payloadLength = 15;
-  bool crcType = true;
-  LoRa.setLoRaPacket(headerType, preambleLength, payloadLength, crcType);
-
-  // Set syncronize word for public network (0x3444)
+  LoRa.setDio3TcxoCtrl(LORA_DIO3_VOLTAGE, LORA_DIO3_TCXO);
+  LoRa.setFrequency(LORA_FREQUENCY);
+  LoRa.setRxGain(LORA_RX_GAIN);
+  LoRa.setLoRaModulation(LORA_SPREADING_FACTOR, LORA_BANDWIDTH, LORA_CODING_RATE, 1);
+  LoRa.setLoRaPacket(SX126X_HEADER_EXPLICIT, LORA_PREAMBLE_LENGTH, LORA_PAYLOAD_LENGTH, LORA_CRC);
   LoRa.setSyncWord(0x1424);
+  LoRa.setDio2RfSwitch(true);
 
   Serial.println("\n-- LORA RECEIVER --\n");
-
   for(;;){
     // Request for receiving new LoRa packet
     LoRa.request();
@@ -142,21 +141,16 @@ void LoRa_thread(void* pvParameters){
     // Put received packet to message and counter variable
     // read() and available() method must be called after request() or listen() method
     const uint8_t msgLen = LoRa.available() - 1;
-    char message[msgLen];
-    uint8_t counter;
-    // available() method return remaining received payload length and will decrement each read() or get() method called
+    char encoded_msg[msgLen];
     uint8_t i=0;
     while (LoRa.available() > 1){
-      message[i++] = LoRa.read();
+      encoded_msg[i++] = LoRa.read();
     }
-    counter = LoRa.read();
 
-    // Print received message and counter in serial
-    Serial.print(message);
-    Serial.print("  ");
-    Serial.println(counter);
-    
-
+    Serial.println(encoded_msg);
+    memcpy(&telemetry, encoded_msg, sizeof(encoded_msg));
+    Serial.println(telemetry.altitudeGPS);
+    Serial.printf("Temp: %.2f, Pressure: %.2f, Lat: %d, Long %d, AltGPS: %d Alt: %.2f\n", telemetry.temperature, telemetry.pressure, telemetry.latitude, telemetry.longitude, telemetry.altitudeGPS,telemetry.altitude);
 
     // Print packet/signal status including package RSSI and SNR
     Serial.print("Packet status: RSSI = ");
@@ -166,14 +160,14 @@ void LoRa_thread(void* pvParameters){
     Serial.println(" dB");
     
     lcd.clear();
-    lcd.print(message);
-    lcd.print("  ");
-    lcd.print(counter);
+    lcd.print(telemetry.latitude);
     lcd.setCursor(0, 1);
+    lcd.print(telemetry.longitude);
+    lcd.setCursor(0, 2);
     lcd.print("RSSI = ");
     lcd.print(LoRa.packetRssi());
     lcd.print(" dBm");
-    lcd.setCursor(0, 2);
+    lcd.setCursor(0, 3);
     lcd.print("SNR = ");
     lcd.print(LoRa.snr());
     lcd.print(" dB");
