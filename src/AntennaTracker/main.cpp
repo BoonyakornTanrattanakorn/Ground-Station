@@ -68,6 +68,7 @@ void ESPNOW_begin(){
   esp_now_register_recv_cb(onDataRecv);
 }
 
+/* Function Declaration */
 void compass_update(void* pvParameters);
 void el_control(void* pvParameters);
 void az_control(void* pvParameters);
@@ -119,7 +120,7 @@ void compass_update(void* pvParameters){
   const TickType_t xDelay5ms = 5 / portTICK_PERIOD_MS;
   for(;;){
     compass.update();
-    if(i == 20){
+    if(i >= 20){
       debugf("EL: %.2f AZ: %.2f\n", compass.el, compass.az);
       i = 0;
     }
@@ -130,53 +131,75 @@ void compass_update(void* pvParameters){
 
 void el_control(void* pvParameters){
   float el_diff;
-  int8_t last_rotation = 0; // -1 = ccw, 0 = idle, 1 = cw
-  int8_t el_error = 2;
+  // int8_t last_rotation = 0; // -1 = ccw, 0 = idle, 1 = cw
+  int8_t el_error = 5;
 
-  const TickType_t xDelay5ms = 5 / portTICK_PERIOD_MS;
   const TickType_t xDelay10ms = 10 / portTICK_PERIOD_MS;
-  const TickType_t xDelay100ms = 100 / portTICK_PERIOD_MS;
-  const TickType_t xDelay500ms = 500 / portTICK_PERIOD_MS;
 
   for(;;){
     el_diff = target.el - compass.el;
-    if(el_diff > el_error){
-      motor.el_ccw(); last_rotation = -1;
-    }else if(el_diff < -el_error){
-      motor.el_cw(); last_rotation = 1;
-    }else{
-      if(last_rotation == 1){
-        motor.el_ccw(); vTaskDelay(xDelay10ms);
-      }else if(last_rotation == -1){
-        motor.el_cw(); vTaskDelay(xDelay10ms);
-      }
-      motor.el_stop(); last_rotation = 0; vTaskDelay(xDelay500ms);
+    if(el_diff >= el_error){
+      motor.set_el_PWM(1);
+      motor.el_ccw();
+    }else if(el_diff >= 0){
+      motor.set_el_PWM( (el_diff / el_error) );
+      motor.el_ccw();
+    }else if(el_diff <= -el_error){
+      motor.set_el_PWM(1);
+      motor.el_cw();
+    }else{ // el_diff <= 0
+      motor.set_el_PWM( -(el_diff / el_error) );
+      motor.el_cw();
     }
+    vTaskDelay(xDelay10ms);
+
+    // if(el_diff > el_error){
+    //   motor.el_ccw(); last_rotation = -1;
+    // }else if(el_diff < -el_error){
+    //   motor.el_cw(); last_rotation = 1;
+    // }else{
+    //   if(last_rotation == 1){
+    //     motor.el_ccw(); vTaskDelay(xDelay10ms);
+    //   }else if(last_rotation == -1){
+    //     motor.el_cw(); vTaskDelay(xDelay10ms);
+    //   }
+    //   motor.el_stop(); last_rotation = 0; vTaskDelay(xDelay500ms);
+    // }
   }
 }
 
 void az_control(void* pvParameters){
   float az_diff;
-  int8_t last_rotation = 0; // -1 = ccw, 0 = idle, 1 = cw
-  int8_t az_error = 2;
+  // int8_t last_rotation = 0; // -1 = ccw, 0 = idle, 1 = cw
+  int8_t el_error = 5;
 
-  const TickType_t xDelay5ms = 5 / portTICK_PERIOD_MS;
-  const TickType_t xDelay10ms = 10 / portTICK_PERIOD_MS;
-  const TickType_t xDelay100ms = 100 / portTICK_PERIOD_MS;
-  const TickType_t xDelay500ms = 500 / portTICK_PERIOD_MS;
   for(;;){
     az_diff = fmod(target.az - compass.az + 540, 360) - 180;
-    if(az_diff > az_error){
-      motor.az_cw(); last_rotation = 1;
-    }else if(az_diff < -az_error){
-      motor.az_ccw(); last_rotation = -1;
-    }else{
-      if(last_rotation == 1){
-        motor.az_ccw(); vTaskDelay(xDelay10ms);
-      }else if(last_rotation == -1){
-        motor.az_cw();vTaskDelay(xDelay10ms);
-      }
-      motor.az_stop(); last_rotation = 0; vTaskDelay(xDelay500ms);
+    if(az_diff >= az_error){
+      motor.set_az_PWM(1);
+      motor.az_ccw();
+    }else if(az_diff >= 0){
+      motor.set_az_PWM( (az_diff / az_error) );
+      motor.el_ccw();
+    }else if(az_diff <= -az_error){
+      motor.set_az_PWM(1);
+      motor.az_cw();
+    }else{ // el_diff <= 0
+      motor.set_az_PWM( -(az_diff / az_error) );
+      motor.az_cw();
     }
+
+    // if(az_diff > az_error){
+    //   motor.az_cw(); last_rotation = 1;
+    // }else if(az_diff < -az_error){
+    //   motor.az_ccw(); last_rotation = -1;
+    // }else{
+    //   if(last_rotation == 1){
+    //     motor.az_ccw(); vTaskDelay(xDelay10ms);
+    //   }else if(last_rotation == -1){
+    //     motor.az_cw();vTaskDelay(xDelay10ms);
+    //   }
+    //   motor.az_stop(); last_rotation = 0; vTaskDelay(xDelay500ms);
+    // }
   }
 }

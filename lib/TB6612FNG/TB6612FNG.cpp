@@ -4,22 +4,30 @@ TB6612FNG::TB6612FNG(){
 
 }
 
-void TB6612FNG::begin(uint8_t AIN2_pin, uint8_t AIN1_pin, uint8_t STBY_pin, uint8_t BIN1_pin, uint8_t BIN2_pin){
+void TB6612FNG::begin(uint8_t PWMA_pin, uint8_t AIN2_pin, uint8_t AIN1_pin, uint8_t STBY_pin, uint8_t BIN1_pin, uint8_t BIN2_pin, uint8_t PWMB_pin){
+    _PWMA_pin = PWMA_pin;
     _AIN2_pin = AIN2_pin;
     _AIN1_pin = AIN1_pin;
     _STBY_pin = STBY_pin;
     _BIN1_pin = BIN1_pin;
     _BIN2_pin = BIN2_pin;
-    pinMode(AIN2_pin, OUTPUT);
-    pinMode(AIN1_pin, OUTPUT);
-    pinMode(STBY_pin, OUTPUT);
-    pinMode(BIN1_pin, OUTPUT);
-    pinMode(BIN2_pin, OUTPUT);
-    digitalWrite(AIN2_pin, LOW);
-    digitalWrite(AIN1_pin, LOW);
-    digitalWrite(STBY_pin, HIGH);
-    digitalWrite(BIN1_pin, LOW);
-    digitalWrite(BIN2_pin, LOW);
+    _PWMB_pin = PWMB_pin;
+
+    pinMode(_AIN2_pin, OUTPUT);
+    pinMode(_AIN1_pin, OUTPUT);
+    pinMode(_STBY_pin, OUTPUT);
+    pinMode(_BIN1_pin, OUTPUT);
+    pinMode(_BIN2_pin, OUTPUT);
+    digitalWrite(_AIN2_pin, LOW);
+    digitalWrite(_AIN1_pin, LOW);
+    digitalWrite(_STBY_pin, HIGH);
+    digitalWrite(_BIN1_pin, LOW);
+    digitalWrite(_BIN2_pin, LOW);
+
+    ledcSetup(PWMA_channel, PWM_FREQ, PWM_RESOLUTION);
+    ledcAttachPin(_PWMA_pin, PWMA_channel);
+    ledcSetup(PWMB_channel, PWM_FREQ, PWM_RESOLUTION);
+    ledcAttachPin(_PWMB_pin, PWMB_channel);
 }
 
 void TB6612FNG::el_cw(){
@@ -40,6 +48,10 @@ void TB6612FNG::el_stop(){
   //Serial.println("EL_STOP");
 }
 
+void TB6612FNG::set_el_PWM(float duty_cycle_percentage){
+  ledcWrite(PWMA_pin, ceil(MAX_DUTY_CYCLE * duty_cycle_percentage));
+}
+
 void TB6612FNG::az_cw(){
   digitalWrite(_BIN1_pin, LOW);
   digitalWrite(_BIN2_pin, HIGH);
@@ -56,4 +68,8 @@ void TB6612FNG::az_stop(){
   digitalWrite(_BIN1_pin, LOW);
   digitalWrite(_BIN2_pin, LOW);
   //Serial.println("AZ_STOP");
+}
+
+void TB6612FNG::set_az_PWM(float duty_cycle_percentage){
+  ledcWrite(PWMB_pin, ceil(MAX_DUTY_CYCLE * duty_cycle_percentage));
 }
