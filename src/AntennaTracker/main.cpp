@@ -1,7 +1,7 @@
 #include <TB6612FNG.h>
 #include <LSM303_sensor.h>
-#include <esp_now.h>
-#include <WiFi.h>
+#include <MPU6050_sensor.h>
+
 
 
 #define DEBUG 1
@@ -28,26 +28,16 @@ el_az target;
 
 TB6612FNG motor;
 LSM303_sensor compass;
+MPU6050_sensor gyro;
+
 
 /* ESPNOW */
-String instruction;
+#include <esp_now.h>
+#include <WiFi.h>
 
 void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
-  instruction.clear();
-  for (int i = 0; i < len; i++) {
-    instruction += (char)incomingData[i];
-  }
-  char charArray[instruction.length() + 1];
-  instruction.toCharArray(charArray, sizeof(charArray));
-  char *token = strtok(charArray, " ");
-  if (token != NULL) {
-    target.az = atoi(token);
-  }
-  token = strtok(NULL, " ");
-  if (token != NULL) {
-    target.el = atoi(token);
-  }
-  Serial.printf("Instruction EZ:%.2f AL:%.2f\n", target.az, target.el);
+  memcpy(&target, incomingData, sizeof(target));
+  Serial.printf("Instruction AZ:%.2f EL:%.2f\n", target.az, target.el);
 }
 
 void ESPNOW_begin(){
@@ -59,7 +49,7 @@ void ESPNOW_begin(){
 
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
+    debugln("Error initializing ESP-NOW");
     return;
   }
   
@@ -78,9 +68,10 @@ void setup() {
 
   // put your setup code here, to run once:
   motor.begin();
+  gyro.begin();
   compass.begin();
   compass.set_calibration_data({  -508,   -441,   -634}, {  +438,   +524,    +86});
-  ESPNOW_begin();
+  //ESPNOW_begin();
 
   xTaskCreatePinnedToCore(
               compass_update,       /* Task function. */
@@ -111,6 +102,9 @@ void setup() {
 }
 
 void loop() {
+  // motor.az_cw();
+  // delay(2000);
+  // motor.az_ccw();
   delay(2000);
 }
 
@@ -118,10 +112,12 @@ void loop() {
 void compass_update(void* pvParameters){
   uint8_t i = 0;
   const TickType_t xDelay5ms = 5 / portTICK_PERIOD_MS;
+  
   for(;;){
     compass.update();
-    if(i >= 20){
-      debugf("EL: %.2f AZ: %.2f\n", compass.el, compass.az);
+    gyro.update();
+    if(i >= 10){
+      debugf("EL: %.2f AZ: %.2f\n", gyro.raw_el, compass.az);
       i = 0;
     }
     ++i;
@@ -137,7 +133,7 @@ void el_control(void* pvParameters){
   const TickType_t xDelay10ms = 10 / portTICK_PERIOD_MS;
 
   for(;;){
-    el_diff = target.el - compass.el;
+    el_diff = target.el - gyro.raw_el;
     if(el_diff >= el_error){
       motor.set_el_PWM(1);
       motor.el_ccw();
@@ -171,8 +167,10 @@ void el_control(void* pvParameters){
 void az_control(void* pvParameters){
   float az_diff;
   // int8_t last_rotation = 0; // -1 = ccw, 0 = idle, 1 = cw
-  int8_t el_error = 5;
+  int8_t az_error = 5;
+  float precise_az_error = 1;
 
+  const TickType_t xDelay10ms = 10 / portTICK_PERIOD_MS;
   for(;;){
     az_diff = fmod(target.az - compass.az + 540, 360) - 180;
     if(az_diff >= az_error){
@@ -180,14 +178,15 @@ void az_control(void* pvParameters){
       motor.az_ccw();
     }else if(az_diff >= 0){
       motor.set_az_PWM( (az_diff / az_error) );
-      motor.el_ccw();
+      motor.az_ccw();
     }else if(az_diff <= -az_error){
       motor.set_az_PWM(1);
       motor.az_cw();
     }else{ // el_diff <= 0
-      motor.set_az_PWM( -(az_diff / az_error) );
+      motor.set_az_PWM( (az_diff / az_error) );
       motor.az_cw();
     }
+    vTaskDelay(xDelay10ms);
 
     // if(az_diff > az_error){
     //   motor.az_cw(); last_rotation = 1;

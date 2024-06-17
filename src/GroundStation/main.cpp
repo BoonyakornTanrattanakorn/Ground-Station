@@ -1,126 +1,185 @@
+#define DEBUG 1
+
+#if DEBUG
+    #define debug(x) Serial.print(x)
+    #define debugln(x) Serial.println(x)
+#else
+    #define debug(x)
+    #define debugln(x)
+#endif
+
+#define PSEUDO_DATA 1
+
+// config
+struct position{
+  double latitude = 32.369875;
+  double longitude = -106.752410;
+  double altitude = 1297; 
+} ground;
+
 
 /* ESPNOW */
-// #include <esp_now.h>
-// #include <WiFi.h>
-// uint8_t broadcastAddress[] = {0xFC, 0xB4, 0x67, 0xF5, 0x4D, 0x8C};
-// esp_now_peer_info_t peerInfo;
+#include <WiFi.h>
+#include <esp_now.h>
 
-// // callback when data is sent
-// void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-//   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
-// }
+bool WIFI_available = 0;
+// receiver address
+uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+esp_now_peer_info_t peerInfo;
 
-// void send(String message){
-//   // Send message via ESP-NOW
-//   if(message.length() >= 250){
-//     Serial.println("Message is too long!");
-//     return;
-//   }
-//   esp_err_t result = esp_now_send(broadcastAddress, (uint8_t*)message.c_str(), message.length());
-// }
+typedef struct struct_message {
+  float el;
+  float az;
+} struct_message;
+struct_message target;
 
-// void ESPNOW_begin(){
-//   WiFi.mode(WIFI_MODE_STA);
-//   Serial.println(WiFi.macAddress());
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  debug("\r\nLast Packet Send Status:\t");
+  debugln(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+}
 
-//   // Set device as a Wi-Fi Station
-//   WiFi.mode(WIFI_STA);
+void ESPNOW_begin(){
+  #if DEBUG
+    WiFi.mode(WIFI_MODE_STA);
+    debugln(WiFi.macAddress());
+  #endif
 
-//   // Init ESP-NOW
-//   if (esp_now_init() != ESP_OK) {
-//     Serial.println("Error initializing ESP-NOW");
-//     return;
-//   }
+  WiFi.mode(WIFI_STA);
+  if (esp_now_init() != 0) {
+    debugln("Error initializing ESP-NOW");
+    return;
+  }
 
-//   // Once ESPNow is successfully Init, we will register for Send CB to
-//   // get the status of Trasnmitted packet
-//   esp_now_register_send_cb(OnDataSent);
+  esp_now_register_send_cb(OnDataSent);
+
+  // Register peer
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  peerInfo.channel = 0;  
+  peerInfo.encrypt = false;
   
-//   // Register peer
-//   memcpy(peerInfo.peer_addr, broadcastAddress, 6);
-//   peerInfo.channel = 0;  
-//   peerInfo.encrypt = false;
-  
-//   // Add peer        
-//   if (esp_now_add_peer(&peerInfo) != ESP_OK){
-//     Serial.println("Failed to add peer");
-//     return;
-//   }
-// }
-
+  // Add peer        
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Failed to add peer");
+    return;
+  }
+  WIFI_available = 1;
+  debugln("WIFI available.");
+}
 
 /* LCD */
 #include <LiquidCrystal_I2C.h>
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 
-/* Lora */
-#include <SX126x.h>
-
-
-#include <Arduino.h>
-
 void LCD_begin(){
   lcd.init();
   lcd.backlight();
+  lcd.autoscroll();
   lcd.print("LCD begin.");
 }
+
+#include <Arduino.h>
 
 void LoRa_thread(void* pvParameters);
 
 void setup(){
   Serial.begin(115200);
+  Wire.setClock(400000L);
   
-  //ESPNOW_begin();
+  ESPNOW_begin();
   LCD_begin();
+  #if(PSEUDO_DATA)
+    return;
+  #endif
+  delay(500);
 
   xTaskCreatePinnedToCore(
   LoRa_thread,          /* Task function. */
   "LoRa thread",        /* name of task. */
   10000,                /* Stack size of task */
   NULL,                 /* parameter of the task */
-  tskIDLE_PRIORITY,                    /* priority of the task */
+  1,                    /* priority of the task */
   NULL,                 /* Task handle to keep track of created task */
   1);                   /* pin task to core 1 */
-  delay(500);
 }
 
 void loop(){
-  delay(10);
-    
-  // Serial.println("Input AZ EL:");
-  // while (!Serial.available());
-  // String AZ_EL = Serial.readStringUntil('\n');
-  // Serial.println("Sending instruction: " + AZ_EL);
-  // send(AZ_EL);
+  #if(PSEUDO_DATA)
+    Serial.printf("DATA,%.8f,%.8f,%.4f,%.4f,%d\n", random(-180*100000.0, 180*100000.0)/100000.0, random(-90*100000.0, 90*100000.0)/10000000.0, random(1000*1000.0, 20000*1000.0)/1000.0, random(1000*1000.0, 20000*1000.0)/1000.0, random(1, 10));
+    target.el = fmod(target.el + random(-1000, 1000)/100.0, 360.0);
+    target.az = fmod(random(-1000, 1000)/100.0, 90.0);
+    lcd.clear();
+    if(WIFI_available){
+      esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &target, sizeof(target));
+      lcd.printf("EL%.2f AZ%.2f ", target.el, target.az);
+      if(result == ESP_OK){
+        lcd.print("OK");
+      }else{
+        lcd.print("SEND ERROR");
+      }
+    }else{
+      lcd.print("WiFi ded");
+    }
+  #endif
+  delay(1000);
 }
 
-struct SensorData
+struct RadioPacket
 {
-  float temperature;
-  float pressure;
-  float altitude;
   int32_t latitude;
   int32_t longitude;
   int32_t altitudeGPS;
-  float accelerationX;
-  float accelerationY;
-  float accelerationZ;
-  float gyroscopeX;
-  float gyroscopeY;
-  float gyroscopeZ;
+  float altitude;
+  int flightStage;
 };
 
-SensorData telemetry;
+// struct RadioPacket
+// {
+//   float temperature;
+//   float pressure;
+//   float altitude;
+//   int32_t latitude;
+//   int32_t longitude;
+//   int32_t altitudeGPS;
+//   float ax;
+//   float ay;
+//   float az;
+//   float gx;
+//   float gy;
+//   float gz;
+// };
+
+RadioPacket packet;
+
+double calculateDistance(double lat1, double lon1, double alt1,
+                         double lat2, double lon2, double alt2) {
+    const double R = 6371.0;
+    
+    // Convert degrees to radians
+    double phi1 = lat1 * DEG_TO_RAD;
+    double lambda1 = lon1 * DEG_TO_RAD;
+    double phi2 = lat2 * DEG_TO_RAD;
+    double lambda2 = lon2 * DEG_TO_RAD;
+
+    // Calculate differences
+    double dx = (R + alt1) * cos(phi1) * cos(lambda1) - (R + alt2) * cos(phi2) * cos(lambda2);
+    double dy = (R + alt1) * cos(phi1) * sin(lambda1) - (R + alt2) * cos(phi2) * sin(lambda2);
+    double dz = (R + alt1) * sin(phi1) - (R + alt2) * sin(phi2);
+
+    // Calculate straight-line 3D distance
+    double distance = sqrt(dx*dx + dy*dy + dz*dz);
+
+    return distance;
+}
 
 #include <LoRaSettings.h>
 
 void LoRa_thread(void* pvParameters){
   SX126x LoRa;
   // Begin LoRa radio and set NSS, reset, busy, txen, and rxen pin with connected arduino pins
-  Serial.println("Begin LoRa radio");
+  debugln("Begin LoRa radio");
   int8_t nssPin = 5, resetPin = 34, busyPin = 35, irqPin = -1, txenPin = -1, rxenPin = -1;
   if (!LoRa.begin(nssPin, resetPin, busyPin, irqPin, txenPin, rxenPin)){
-    Serial.println("Something wrong, can't begin LoRa radio");
+    debugln("Something wrong, can't begin LoRa radio");
     while(1);
   }
 
@@ -132,11 +191,11 @@ void LoRa_thread(void* pvParameters){
   LoRa.setSyncWord(0x1424);
   LoRa.setDio2RfSwitch(true);
 
-  Serial.println("\n-- LORA RECEIVER --\n");
+  debugln("\n-- LORA RECEIVER --\n");
+
+  int total_packet_receieved = 0;
   for(;;){
-    // Request for receiving new LoRa packet
     LoRa.request();
-    // Wait for incoming LoRa packet
     LoRa.wait();
     // Put received packet to message and counter variable
     // read() and available() method must be called after request() or listen() method
@@ -146,37 +205,41 @@ void LoRa_thread(void* pvParameters){
     while (LoRa.available() > 1){
       encoded_msg[i++] = LoRa.read();
     }
-
-    Serial.println(encoded_msg);
-    memcpy(&telemetry, encoded_msg, sizeof(encoded_msg));
-    Serial.println(telemetry.altitudeGPS);
-    Serial.printf("Temp: %.2f, Pressure: %.2f, Lat: %d, Long %d, AltGPS: %d Alt: %.2f\n", telemetry.temperature, telemetry.pressure, telemetry.latitude, telemetry.longitude, telemetry.altitudeGPS,telemetry.altitude);
-
-    // Print packet/signal status including package RSSI and SNR
-    Serial.print("Packet status: RSSI = ");
-    Serial.print(LoRa.packetRssi());
-    Serial.print(" dBm | SNR = ");
-    Serial.print(LoRa.snr());
-    Serial.println(" dB");
-    
-    lcd.clear();
-    lcd.print(telemetry.latitude);
-    lcd.setCursor(0, 1);
-    lcd.print(telemetry.longitude);
-    lcd.setCursor(0, 2);
-    lcd.print("RSSI = ");
-    lcd.print(LoRa.packetRssi());
-    lcd.print(" dBm");
-    lcd.setCursor(0, 3);
-    lcd.print("SNR = ");
-    lcd.print(LoRa.snr());
-    lcd.print(" dB");
-
+    memcpy(&packet, encoded_msg, sizeof(encoded_msg));
 
     // Show received status in case CRC or header error occur
     uint8_t status = LoRa.status();
-    if (status == SX126X_STATUS_CRC_ERR) Serial.println("CRC error");
-    else if (status == SX126X_STATUS_HEADER_ERR) Serial.println("Packet header error");
-    Serial.println();
+    if(status == SX126X_STATUS_CRC_ERR){
+      debugln("CRC error"); lcd.print("CRC error");
+    }
+    else if(status == SX126X_STATUS_HEADER_ERR){
+      debugln("Packet header error"); lcd.print("Header error");
+    }else{
+      debugln("Latitude, Longitude, AltitudeGPS, Altitude, FlightState");
+      Serial.printf("DATA,%.8f,%.8f,%.4f,%.4f,%d\n", packet.latitude/100000000.0, packet.longitude/10000000.0, packet.altitudeGPS/1000.0, packet.altitude, packet.flightStage);
+      #if DEBUG
+        Serial.printf("Packet status: RSSI = %d dBm | SNR = %f dB\n", LoRa.packetRssi(), LoRa.snr());
+      #endif
+
+      lcd.clear();
+      lcd.printf("Lat=%.8f", packet.latitude/100000000.0);
+      lcd.setCursor(0, 1);
+      lcd.printf("Long=%.8f", packet.longitude/100000000.0);
+      lcd.setCursor(0, 2);
+      lcd.printf("Dist=%.2fkm|%d", calculateDistance(ground.latitude, ground.longitude, ground.altitude, packet.latitude/100000000.0, packet.longitude/10000000.0, packet.altitudeGPS/1000.0), ++total_packet_receieved);
+      lcd.setCursor(0, 3);
+      lcd.printf("RSSI=%d,SNR=%.2f", LoRa.packetRssi(), LoRa.snr());
+
+      if(WIFI_available){
+        esp_now_send(broadcastAddress, (uint8_t *) &target, sizeof(target));
+      }else{
+        debugln("WIFI not available.");
+      }
+    }
+    debugln();
   }
+}
+
+void print_pseudo_data(){
+  Serial.printf("DATA,%.8f,%.8f,%.4f,%.4f,%d\n", random(-180*100000.0, 180*100000.0)/100000.0, random(-90*100000.0, 90*100000.0)/10000000.0, random(1000*1000.0, 20000*1000.0)/1000.0, random(1000*1000.0, 20000*1000.0)/1000.0, random(1, 10));
 }

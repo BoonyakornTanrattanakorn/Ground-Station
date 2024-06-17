@@ -26,9 +26,11 @@ class TB6612FNG
         void el_cw();
         void el_ccw();
         void el_stop();
+        void set_el_PWM(float duty_cycle_percentage);
         void az_cw();
         void az_ccw();
         void az_stop();
+        void set_az_PWM(float duty_cycle_percentage);
 };
 
 #endif

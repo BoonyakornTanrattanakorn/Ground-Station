@@ -26,8 +26,10 @@ void TB6612FNG::begin(uint8_t PWMA_pin, uint8_t AIN2_pin, uint8_t AIN1_pin, uint
 
     ledcSetup(PWMA_channel, PWM_FREQ, PWM_RESOLUTION);
     ledcAttachPin(_PWMA_pin, PWMA_channel);
+    ledcWrite(PWMA_channel, 255);
     ledcSetup(PWMB_channel, PWM_FREQ, PWM_RESOLUTION);
     ledcAttachPin(_PWMB_pin, PWMB_channel);
+    ledcWrite(PWMB_channel, 255);
 }
 
 void TB6612FNG::el_cw(){
@@ -49,7 +51,7 @@ void TB6612FNG::el_stop(){
 }
 
 void TB6612FNG::set_el_PWM(float duty_cycle_percentage){
-  ledcWrite(PWMA_pin, ceil(MAX_DUTY_CYCLE * duty_cycle_percentage));
+  ledcWrite(PWMA_channel, ceil(MAX_DUTY_CYCLE * duty_cycle_percentage));
 }
 
 void TB6612FNG::az_cw(){
@@ -71,5 +73,5 @@ void TB6612FNG::az_stop(){
 }
 
 void TB6612FNG::set_az_PWM(float duty_cycle_percentage){
-  ledcWrite(PWMB_pin, ceil(MAX_DUTY_CYCLE * duty_cycle_percentage));
+  ledcWrite(PWMB_channel, ceil(MAX_DUTY_CYCLE * duty_cycle_percentage));
 }
