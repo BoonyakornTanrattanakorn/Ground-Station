@@ -8,13 +8,13 @@
     #define debugln(x)
 #endif
 
-#define PSEUDO_DATA 1
+#define PSEUDO_DATA 0
 
 // config
 struct position{
-  double latitude = 32.369875;
-  double longitude = -106.752410;
-  double altitude = 1297; 
+  double latitude = 32.940448;
+  double longitude = -106.922263;
+  double altitude = 1383 ; 
 } ground;
 
 
@@ -53,6 +53,8 @@ void ESPNOW_begin(){
   esp_now_register_send_cb(OnDataSent);
 
   // Register peer
+
+
   memcpy(peerInfo.peer_addr, broadcastAddress, 6);
   peerInfo.channel = 0;  
   peerInfo.encrypt = false;
@@ -73,16 +75,18 @@ LiquidCrystal_I2C lcd(0x27, 20, 4);
 void LCD_begin(){
   lcd.init();
   lcd.backlight();
-  lcd.autoscroll();
+  lcd.clear();
   lcd.print("LCD begin.");
 }
 
 #include <Arduino.h>
+void print_pseudo_data();
 
 void LoRa_thread(void* pvParameters);
 
 void setup(){
   Serial.begin(115200);
+  Wire.begin();
   Wire.setClock(400000L);
   
   ESPNOW_begin();
@@ -104,7 +108,7 @@ void setup(){
 
 void loop(){
   #if(PSEUDO_DATA)
-    Serial.printf("DATA,%.8f,%.8f,%.4f,%.4f,%d\n", random(-180*100000.0, 180*100000.0)/100000.0, random(-90*100000.0, 90*100000.0)/10000000.0, random(1000*1000.0, 20000*1000.0)/1000.0, random(1000*1000.0, 20000*1000.0)/1000.0, random(1, 10));
+    print_pseudo_data();
     target.el = fmod(target.el + random(-1000, 1000)/100.0, 360.0);
     target.az = fmod(random(-1000, 1000)/100.0, 90.0);
     lcd.clear();
@@ -125,10 +129,11 @@ void loop(){
 
 struct RadioPacket
 {
+  uint32_t timestamp;
   int32_t latitude;
   int32_t longitude;
   int32_t altitudeGPS;
-  float altitude;
+  float altitudePressure;
   int flightStage;
 };
 
@@ -215,18 +220,26 @@ void LoRa_thread(void* pvParameters){
     else if(status == SX126X_STATUS_HEADER_ERR){
       debugln("Packet header error"); lcd.print("Header error");
     }else{
-      debugln("Latitude, Longitude, AltitudeGPS, Altitude, FlightState");
-      Serial.printf("DATA,%.8f,%.8f,%.4f,%.4f,%d\n", packet.latitude/100000000.0, packet.longitude/10000000.0, packet.altitudeGPS/1000.0, packet.altitude, packet.flightStage);
+      debugln("Latitude,Longitude,AltitudeGPS,AltitudePressure,flightState,RSSI,SNR");
+      Serial.printf("DATA,%.8f,%.8f,%.4f,%.4f,%d,%d,%f\n",
+        packet.latitude/10000000.0, 
+        packet.longitude/10000000.0, 
+        packet.altitudeGPS/1000.0, 
+        packet.altitudePressure, 
+        packet.flightStage,
+        LoRa.packetRssi(),
+        LoRa.snr()
+      );
       #if DEBUG
         Serial.printf("Packet status: RSSI = %d dBm | SNR = %f dB\n", LoRa.packetRssi(), LoRa.snr());
       #endif
 
       lcd.clear();
-      lcd.printf("Lat=%.8f", packet.latitude/100000000.0);
+      lcd.printf("Lat=%.8f", packet.latitude/10000000.0);
       lcd.setCursor(0, 1);
-      lcd.printf("Long=%.8f", packet.longitude/100000000.0);
+      lcd.printf("Long=%.8f", packet.longitude/10000000.0);
       lcd.setCursor(0, 2);
-      lcd.printf("Dist=%.2fkm|%d", calculateDistance(ground.latitude, ground.longitude, ground.altitude, packet.latitude/100000000.0, packet.longitude/10000000.0, packet.altitudeGPS/1000.0), ++total_packet_receieved);
+      lcd.printf("Dist=%.2fkm|%d", calculateDistance(ground.latitude, ground.longitude, ground.altitude, packet.latitude/10000000.0, packet.longitude/10000000.0, packet.altitudeGPS/1000000.0), ++total_packet_receieved);
       lcd.setCursor(0, 3);
       lcd.printf("RSSI=%d,SNR=%.2f", LoRa.packetRssi(), LoRa.snr());
 
@@ -241,5 +254,20 @@ void LoRa_thread(void* pvParameters){
 }
 
 void print_pseudo_data(){
-  Serial.printf("DATA,%.8f,%.8f,%.4f,%.4f,%d\n", random(-180*100000.0, 180*100000.0)/100000.0, random(-90*100000.0, 90*100000.0)/10000000.0, random(1000*1000.0, 20000*1000.0)/1000.0, random(1000*1000.0, 20000*1000.0)/1000.0, random(1, 10));
+  double fake_latitude = random(-180*10000000.0, 180*10000000.0) / 10000000.0;
+  double fake_longitude = random(-90*10000000.0, 90*10000000.0) / 10000000.0;
+  double fake_altitudeGPS = random(0, 12000*1000) / 1000.0;
+  double fake_altitude = random(0, 12000*1000) / 1000.0;
+  int fake_flightStage = random(1, 5);
+  int fake_rssi = random(-130, -1);
+  double fake_snr = random(-20*4, 20*4) / 4.0;
+  Serial.printf("DATA,%.8f,%.8f,%.4f,%.4f,%d,%d,%.2f\n", 
+    fake_latitude, 
+    fake_longitude, 
+    fake_altitudeGPS, 
+    fake_altitude, 
+    fake_flightStage, 
+    fake_rssi,
+    fake_snr
+  );
 }

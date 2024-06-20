@@ -64,9 +64,9 @@ uint8_t DownArrow = 1;
 uint8_t LeftArrow = 2;
 uint8_t RightArrow = 3;
 
-/* LSM303 */
+/* compass */
 #include <LSM303_sensor.h>
-LSM303_sensor LSM303;
+LSM303_sensor compass;
 
 /* ESPNOW */
 #include <ESP8266WiFi.h>
@@ -125,24 +125,24 @@ void setup() {
   lcd.createChar(RightArrow, customChar.RightArrowArray);
   lcd.backlight();
 
-  LSM303.begin();
-  LSM303.set_calibration_data({  -523,   -845,   -348}, {  +337,   +382,   +561});
+  compass.begin();
+  compass.set_calibration_data({  -362,   -962,   -459}, {  +659,   +287,   +464});
 
   ESPNOW_begin();
 }
 
 
 void loop() {
-  LSM303.update();
-  //Serial.println(LSM303.el+el_bias);
+  compass.update();
+  //Serial.println(compass.el+el_bias);
   lcd.clear();
   bool centered = 1;
-  if(target.el-(LSM303.el+el_bias) > el_error){
+  if(target.el-compass.el > el_error){
     display_down(); centered = 0;
-  }else if(target.el-(LSM303.el+el_bias) < -el_error){
+  }else if(target.el-compass.el < -el_error){
     display_up(); centered = 0;
   }
-  float az_diff = fmod(target.az - LSM303.az + 540, 360) - 180;
+  float az_diff = fmod(target.az - compass.az + 540, 360) - 180;
   Serial.println(az_diff);
   if(az_diff > az_error){
     display_right(); centered = 0;
@@ -153,10 +153,10 @@ void loop() {
     display_centered();
   }
   lcd.setCursor(0, 1);
-  lcd.printf("EL%.2f AZ%.2f", LSM303.el+el_bias, LSM303.az);
+  lcd.printf("EL%.2f AZ%.2f", compass.el+el_bias, compass.az);
   unsigned long t = millis();
   while(millis() - t <= 50){
-    LSM303.update();
+    compass.update();
     delay(5);
   }
 }

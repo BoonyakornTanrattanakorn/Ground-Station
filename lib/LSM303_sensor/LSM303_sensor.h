@@ -16,6 +16,9 @@ class LSM303_sensor
         float estimated_az_vector[2] = {0};
         float raw_el;
         const float alpha = 0.15;
+        float fXa = 0;
+        float fYa = 0;
+        float fZa = 0;
         float fXm = 0;
         float fYm = 0;
         float fZm = 0;
